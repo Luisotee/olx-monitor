@@ -1,126 +1,158 @@
-'use strict';
+"use strict";
 
-const notifier = require('./Notifier')
-const $logger = require('./Logger')
+const notifier = require("./Notifier");
+const $logger = require("./Logger");
 
-const adRepository = require('../repositories/adRepository.js')
+const adRepository = require("../repositories/adRepository.js");
+const config = require("../config.js");
 
 class Ad {
+  constructor(ad) {
+    this.id = ad.id;
+    this.url = ad.url;
+    this.title = ad.title;
+    this.searchTerm = ad.searchTerm;
+    this.price = ad.price;
+    this.valid = false;
+    (this.saved = null), (this.notify = ad.notify);
+  }
 
-    constructor(ad) {
-        this.id         = ad.id
-        this.url        = ad.url
-        this.title      = ad.title
-        this.searchTerm = ad.searchTerm
-        this.price      = ad.price
-        this.valid      = false
-        this.saved      = null,
-        this.notify     = ad.notify
+  process = async () => {
+    if (!this.isValidAd()) {
+      $logger.debug("Ad not valid");
+      return false;
     }
 
-    process = async () => {
+    try {
+      // check if this entry was already added to DB
+      if (await this.alreadySaved()) {
+        return this.checkPriceChange();
+      } else {
+        // create a new entry in the database
+        return this.addToDataBase();
+      }
+    } catch (error) {
+      $logger.error(error);
+    }
+  };
 
-        if (!this.isValidAd()) {
-            $logger.debug('Ad not valid');
-            return false
-        }
+  alreadySaved = async () => {
+    try {
+      this.saved = await adRepository.getAd(this.id);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  addToDataBase = async () => {
+    try {
+      await adRepository.createAd(this);
+      $logger.info("Ad " + this.id + " added to the database");
+    } catch (error) {
+      $logger.error(error);
+    }
+
+    if (this.notify) {
+      try {
+        const msg =
+          "New ad found!\n" +
+          this.title +
+          " - R$" +
+          this.price +
+          "\n\n" +
+          this.url;
+        notifier.sendNotification(msg, this.id);
+      } catch (error) {
+        $logger.error("Could not send a notification");
+      }
+    }
+  };
+
+  updatePrice = async () => {
+    $logger.info("updatePrice");
+
+    try {
+      await adRepository.updateAd(this);
+    } catch (error) {
+      $logger.error(error);
+    }
+  };
+
+  checkPriceChange = async () => {
+    if (this.price !== this.saved.price) {
+      await this.updatePrice(this);
+
+      // just send a notification if the price dropped
+      if (this.price < this.saved.price) {
+        $logger.info("This ad had a price reduction: " + this.url);
+
+        const decreasePercentage = Math.abs(
+          Math.round(((this.price - this.saved.price) / this.saved.price) * 100)
+        );
+
+        const msg =
+          "Price drop found! " +
+          decreasePercentage +
+          "% OFF!\n" +
+          "From R$" +
+          this.saved.price +
+          " to R$" +
+          this.price +
+          "\n\n" +
+          this.url;
 
         try {
-
-            // check if this entry was already added to DB
-            if (await this.alreadySaved()) {
-                return this.checkPriceChange()
-            }
-
-            else {
-                // create a new entry in the database
-                return this.addToDataBase()
-            }
-
+          await notifier.sendNotification(msg, this.id);
         } catch (error) {
-            $logger.error(error);
+          $logger.error(error);
         }
+      }
     }
+  };
 
-    alreadySaved = async () => {
-        try {
-            this.saved = await adRepository.getAd(this.id)
-            return true
-        } catch (error) {
-            return false
-        }
+  // some elements found in the ads selection don't have an url
+  // I supposed that OLX adds other content between the ads,
+  // let's clean those empty ads
+  isValidAd = () => {
+    const isPriceWithinRange =
+      (typeof config.minPrice === "undefined" ||
+        this.price > config.minPrice) &&
+      (typeof config.maxPrice === "undefined" || this.price < config.maxPrice);
+
+    if (
+      !isNaN(this.price) &&
+      this.url &&
+      this.id &&
+      isPriceWithinRange &&
+      !this.title.includes(config.titleExcludes)
+    ) {
+      console.log("Ad is valid");
+      this.valid = true;
+      return true;
+    } else {
+      console.log(
+        "Ad is not valid since either:\n" +
+          "1. Price is not a number: " +
+          isNaN(this.price) +
+          "\n" +
+          "2. URL is not defined: " +
+          !this.url +
+          "\n" +
+          "3. ID is not defined: " +
+          !this.id +
+          "\n" +
+          "4. Price is not within range: " +
+          !isPriceWithinRange +
+          "\n" +
+          "5. Title includes excluded words: " +
+          config.titleExcludes +
+          "\n"
+      );
+      this.valid = false;
+      return false;
     }
-
-    addToDataBase = async () => {
-
-        try {
-            await adRepository.createAd(this)
-            $logger.info('Ad ' + this.id + ' added to the database')
-        }
-
-        catch (error) {
-            $logger.error(error)
-        }
-
-        if (this.notify) {
-            try {
-                const msg = 'New ad found!\n' + this.title + ' - R$' + this.price + '\n\n' + this.url
-                notifier.sendNotification(msg, this.id)
-            } catch (error) {
-                $logger.error('Could not send a notification')
-            }
-        }
-    }
-
-    updatePrice = async () => {
-        $logger.info('updatePrice')
-
-        try {
-            await adRepository.updateAd(this)
-        } catch (error) {
-            $logger.error(error)
-        }
-    }
-
-    checkPriceChange = async () => {
-
-        if (this.price !== this.saved.price) {
-
-            await this.updatePrice(this)
-
-            // just send a notification if the price dropped
-            if (this.price < this.saved.price) {
-
-                $logger.info('This ad had a price reduction: ' + this.url)
-
-                const decreasePercentage = Math.abs(Math.round(((this.price - this.saved.price) / this.saved.price) * 100))
-
-                const msg = 'Price drop found! ' + decreasePercentage + '% OFF!\n' +
-                    'From R$' + this.saved.price + ' to R$' + this.price + '\n\n' + this.url
-
-                try {
-                    await notifier.sendNotification(msg, this.id)
-                } catch (error) {
-                    $logger.error(error)
-                }
-            }
-        }
-    }
-
-    // some elements found in the ads selection don't have an url
-    // I supposed that OLX adds other content between the ads,
-    // let's clean those empty ads
-    isValidAd = () => {
-
-        if (!isNaN(this.price) && this.url && this.id) {
-            this.valid = true
-            return true
-        }
-        else {
-            this.valid = false
-            return false
-        }
-    }
+  };
 }
 
-module.exports = Ad
+module.exports = Ad;
