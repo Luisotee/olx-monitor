@@ -115,43 +115,73 @@ class Ad {
   // I supposed that OLX adds other content between the ads,
   // let's clean those empty ads
   isValidAd = () => {
-    const isPriceWithinRange =
-      (typeof config.minPrice === "undefined" ||
-        this.price > config.minPrice) &&
-      (typeof config.maxPrice === "undefined" || this.price < config.maxPrice);
+    // Destructure properties from this, providing default values where necessary
+    const { title = "", price, url, id } = this;
 
-    if (
-      !isNaN(this.price) &&
-      this.url &&
-      this.id &&
+    const titleLower = title.toLowerCase();
+    const titleContainsLower = config.titleContains.map((keyword) =>
+      keyword.toLowerCase()
+    );
+    const titleExcludesLower = config.titleExcludes.map((keyword) =>
+      keyword.toLowerCase()
+    );
+
+    // Check if the price is within the specified range
+    const isPriceWithinRange =
+      (config.minPrice === undefined || price > config.minPrice) &&
+      (config.maxPrice === undefined || price < config.maxPrice);
+
+    // Check if the title contains required keywords
+    const titleContainsRequired =
+      titleContainsLower.length === 0 ||
+      titleContainsLower.some((keyword) => titleLower.includes(keyword));
+
+    // Check if the title excludes specified keywords
+    const titleExcludesRequired = !titleExcludesLower.some((keyword) =>
+      titleLower.includes(keyword)
+    );
+
+    // Determine if the ad is valid based on all conditions
+    const isValid =
+      !isNaN(price) &&
+      url &&
+      id &&
       isPriceWithinRange &&
-      !this.title.includes(config.titleExcludes)
-    ) {
+      titleExcludesRequired &&
+      titleContainsRequired;
+
+    this.valid = isValid;
+
+    if (isValid) {
       console.log("Ad is valid");
-      this.valid = true;
-      return true;
     } else {
+      // Log reasons for invalid ad
       console.log(
-        "Ad is not valid since either:\n" +
-          "1. Price is not a number: " +
-          isNaN(this.price) +
-          "\n" +
-          "2. URL is not defined: " +
-          !this.url +
-          "\n" +
-          "3. ID is not defined: " +
-          !this.id +
-          "\n" +
-          "4. Price is not within range: " +
-          !isPriceWithinRange +
-          "\n" +
-          "5. Title includes excluded words: " +
-          config.titleExcludes +
-          "\n"
+        "Ad is not valid due to:\n" +
+          [
+            { condition: isNaN(price), message: "Price is not a number" },
+            { condition: !url, message: "URL is not defined" },
+            { condition: !id, message: "ID is not defined" },
+            {
+              condition: !isPriceWithinRange,
+              message: "Price is not within range",
+            },
+            {
+              condition: !titleExcludesRequired,
+              message: "Title includes excluded words",
+            },
+            {
+              condition: !titleContainsRequired,
+              message: "Title does not contain required words",
+            },
+          ]
+            .filter(({ condition }) => condition)
+            .map(({ message }) => `- ${message}`)
+            .join("\n")
       );
-      this.valid = false;
-      return false;
     }
+
+    return isValid;
   };
 }
 
