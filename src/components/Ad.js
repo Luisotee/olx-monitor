@@ -126,11 +126,6 @@ class Ad {
       keyword.toLowerCase()
     );
 
-    // Check if the price is within the specified range
-    const isPriceWithinRange =
-      (config.minPrice === undefined || price > config.minPrice) &&
-      (config.maxPrice === undefined || price < config.maxPrice);
-
     // Check if the title contains required keywords
     const titleContainsRequired =
       titleContainsLower.length === 0 ||
@@ -146,7 +141,6 @@ class Ad {
       !isNaN(price) &&
       url &&
       id &&
-      isPriceWithinRange &&
       titleExcludesRequired &&
       titleContainsRequired;
 
@@ -162,10 +156,6 @@ class Ad {
             { condition: isNaN(price), message: "Price is not a number" },
             { condition: !url, message: "URL is not defined" },
             { condition: !id, message: "ID is not defined" },
-            {
-              condition: !isPriceWithinRange,
-              message: "Price is not within range",
-            },
             {
               condition: !titleExcludesRequired,
               message: "Title includes excluded words",

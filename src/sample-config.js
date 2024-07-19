@@ -11,8 +11,6 @@ config.interval = "*/5 * * * *";
 config.telegramChatID = process.env.TELEGRAM_CHAT_ID;
 config.telegramToken = process.env.TELEGRAM_TOKEN;
 config.dbFile = "../data/ads.db";
-config.minPrice = undefined; // Minimum price to filter ads, if undefined it will not filter
-config.maxPrice = undefined; // Maximum price to filter ads, if undefined it will not filter
 config.titleExcludes = ["", ""]; // Exclude ads with these words in the title, word are case insensitive
 config.titleContains = []; // Only show ads with these words in the title (if empty it will not filter) Example: ["iphone", "samsung"], words are case insensitive
 
